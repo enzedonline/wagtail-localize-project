@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+{% load wagtailimages_tags %}
+
+{% block content %}
+
+<h1>{{ page.title }}</h1>
+
+<blockquote class="blockquote">
+  <p class="mb-0">{{ page.introduction }}</p>
+</blockquote>
+
+{% if posts %}
+    {% for post in posts %}
+        <div class="row">
+            <div class="col-4">
+                <a class="link-unstyled" href="{{post.url}}">
+                    {% image post.image fill-250x250 as blog_img %}
+                    <img src="{{ blog_img.url }}" alt="{{ blog_img.alt }}">
+                </a>
+            </div>
+            <div class="col-8">
+                <h3>{{ post.title }}</h3>
+                {{ post.body }}
+                <a href="{{post.url}}" class="btn">Read More ...</a>
+            </div>
+        </div>
+
+    {% endfor %}
+{% else %}
+    No results found
+{% endif %}
+
+{% for lang in lang_versions %}
+    {{ lang.url }}
+{% endfor %}
+
+{% endblock content %}
