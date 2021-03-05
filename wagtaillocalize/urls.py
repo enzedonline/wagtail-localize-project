@@ -8,8 +8,10 @@ from wagtail.core import urls as wagtail_urls
 from wagtail.documents import urls as wagtaildocs_urls
 
 from search import views as search_views
+from .views import set_language_from_url
 
 urlpatterns = [
+    path('lang/<str:language_code>/', set_language_from_url, name='set_language_from_url'),
     path('django-admin/', admin.site.urls),
     path('admin/', include(wagtailadmin_urls)),
     path('documents/', include(wagtaildocs_urls)),

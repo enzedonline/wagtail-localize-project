@@ -7,6 +7,7 @@ INSTALLED_APPS = [
     'home',
     'search',
     'blog',
+    'menu',
 
     'wagtail_localize',
     'wagtail_localize.locales',
@@ -56,7 +57,10 @@ TEMPLATES = [
         ],
         'APP_DIRS': True,
         'OPTIONS': {
-            'context_processors': [
+                'libraries': {
+                    'menu_tags': 'menu.templatetags.menu_tags',
+                },
+                'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
@@ -115,6 +119,16 @@ WAGTAIL_CONTENT_LANGUAGES = LANGUAGES = [
     ('ca', "Català"),
     ('fr', "Français"),
 ]
+
+# used for language switcher to build url for flag icons - place this folder in the static dir
+LANGUAGE_FLAG_LOCATION = 'flags'
+
+LANGUAGE_HOMEPAGES = {
+    'en': '/home/',
+    'ca': '/home-1/',
+    'es': '/home-2/',
+    'fr': '/home-3/',
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/

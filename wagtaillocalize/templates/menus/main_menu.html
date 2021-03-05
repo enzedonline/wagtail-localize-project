@@ -1,0 +1,76 @@
+{% load wagtailimages_tags menu_tags %}
+{% load static i18n %}
+
+{% get_current_language as LANGUAGE_CODE %}
+{% get_menu "main" None request.user.is_authenticated as navigation %}
+{% company_logo as logo %}
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">Wagtail Localize Test</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarColor01">
+    <ul class="navbar-nav mr-auto">
+        {% for item in navigation %}
+            {% get_menu item.slug item.page request.user.is_authenticated as submenu %}
+            {% if not submenu %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{item.url}}">                            
+                        {% if item.icon %}
+                            {% image item.icon fill-25x25 class="image-menu" %}
+                        {% endif %}
+                        {{ item.title }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-toggle="dropdown"  role="button" aria-haspopup="true" aria-expanded="false">
+                        {% if item.icon %}
+                            {% image item.icon fill-25x25 class="image-menu" %}
+                        {% endif %}
+                        {{ item.title }}
+                    </a>
+                     <div class="dropdown-menu">
+                       {% if item.show_linked_page %}
+                            <a class="dropdown-item" href="{{item.url}}">
+                                {{ item.link_page_title }}
+                            </a>
+                            <div class="dropdown-divider"></div>                                               
+                        {% endif %}
+                        {% for subitem in submenu %}
+                            <a class="dropdown-item" href="{{subitem.url}}">
+                                {% if subitem.icon %}
+                                    {% image subitem.icon fill-25x25 class="image-menu" %}
+                                {% endif %}
+                                {{ subitem.title }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                </li>
+            {% endif %}
+        {% endfor %}
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                <img src="{% get_lang_flag LANGUAGE_CODE %}">
+            </a>
+            <div class="dropdown-menu">
+                {% language_switcher LANGUAGE_CODE as langs %}
+                {% for lang in langs %}
+                    <a class="dropdown-item" href="{{ lang.url }}">
+                        <img src="{{ lang.flag }}">
+                        {{ lang.language }}
+                    </a>
+                {% endfor %}
+            </div>
+        </li>       
+    </ul>
+ 
+    <form class="form-inline my-2 my-lg-0">
+      <input class="form-control mr-sm-2" type="text" placeholder="Search">
+      <button class="btn btn-secondary my-2 my-sm-0" type="submit">Search</button>
+    </form>
+  </div>
+</nav>
+
