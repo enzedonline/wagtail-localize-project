@@ -2,7 +2,7 @@
 {% load static i18n %}
 
 {% get_current_language as LANGUAGE_CODE %}
-{% get_menu "main" None request.user.is_authenticated as navigation %}
+{% get_menu "main" None request.user.is_authenticated LANGUAGE_CODE as navigation %}
 {% company_logo as logo %}
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -14,23 +14,23 @@
   <div class="collapse navbar-collapse" id="navbarColor01">
     <ul class="navbar-nav mr-auto">
         {% for item in navigation %}
-            {% get_menu item.slug item.page request.user.is_authenticated as submenu %}
-            {% if not submenu %}
+            {% if not item.is_submenu %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{item.url}}">                            
                         {% if item.icon %}
                             {% image item.icon fill-25x25 class="image-menu" %}
                         {% endif %}
-                        {{ item.title }}
+                        {{ item.title }} not sub
                     </a>
                 </li>
             {% else %}
+                {% get_menu item.slug item.page request.user.is_authenticated as submenu %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" data-toggle="dropdown"  role="button" aria-haspopup="true" aria-expanded="false">
                         {% if item.icon %}
                             {% image item.icon fill-25x25 class="image-menu" %}
                         {% endif %}
-                        {{ item.title }}
+                        {{ item.title }} {{item.slug}}
                     </a>
                      <div class="dropdown-menu">
                        {% if item.show_linked_page %}

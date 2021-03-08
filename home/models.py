@@ -13,3 +13,7 @@ class HomePage(Page):
         context['lang_versions'] = self.get_translations()
         context['default_lang'] = (settings.LANGUAGES[0][0])
         return context
+
+    def clean(self, *args, **kwargs):
+        self.slug = self.locale.language_code
+        super().clean(*args, **kwargs)
