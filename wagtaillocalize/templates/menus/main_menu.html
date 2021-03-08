@@ -5,6 +5,9 @@
 {% get_menu "main" None request.user.is_authenticated LANGUAGE_CODE as navigation %}
 {% company_logo as logo %}
 
+        {# Global javascript #}
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.js" integrity="sha512-n/4gHW3atM3QqRcbCn6ewmpxcLAHGaDjpEBu4xZd47N0W2oQ+6q7oc3PXstrJYXcbNU1OHdQ1T7pAP+gi5Yu8g==" crossorigin="anonymous"></script>
+        
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
   <a class="navbar-brand" href="/">Wagtail Localize Test</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
@@ -26,26 +29,47 @@
             {% else %}
                 {% get_menu item.slug item.page request.user.is_authenticated as submenu %}
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-toggle="dropdown"  role="button" aria-haspopup="true" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle" id="navbardrop" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
                         {% if item.icon %}
                             {% image item.icon fill-25x25 class="image-menu" %}
                         {% endif %}
                         {{ item.title }}
                     </a>
-                     <div class="dropdown-menu">
-                       {% if item.show_linked_page %}
-                            <a class="dropdown-item" href="{{item.url}}">
-                                {{ item.link_page_title }}
-                            </a>
-                            <div class="dropdown-divider"></div>                                               
-                        {% endif %}
+                    <div class="dropdown-menu">
                         {% for subitem in submenu %}
-                            <a class="dropdown-item" href="{{subitem.url}}">
-                                {% if subitem.icon %}
-                                    {% image subitem.icon fill-25x25 class="image-menu" %}
-                                {% endif %}
-                                {{ subitem.title }}
-                            </a>
+                            {% if not subitem.is_submenu %}
+                                <a class="dropdown-item" href="{{subitem.url}}">
+                                    {% if subitem.icon %}
+                                        {% image subitem.icon fill-25x25 class="image-menu" %}
+                                    {% endif %}
+                                    {{ subitem.title }}
+                                </a>
+                            {% else %}
+                                {% get_menu subitem.slug None request.user.is_authenticated as subsubmenu %}
+                                <div class="dropright"> 
+                                <button class="btn btn-dark bg-transparent dropdown-toggle" data-toggle="dropdown">
+                                    {% if subitem.icon %}
+                                        {% image subitem.icon fill-25x25 class="image-menu" %}
+                                        {% endif %}
+                                    {{ subitem.title }}
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-left">
+                                    {% for subitem in subsubmenu %}
+                                        {% if not subitem.is_submenu %}
+                                            <a class="dropdown-item" href="{{subitem.url}}">
+                                                {% if subitem.icon %}
+                                                    {% image subitem.icon fill-25x25 class="image-menu" %}
+                                                {% endif %}
+                                                {{ subitem.title }}
+                                            </a>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                </div>
+                            {% endif %}
+                            {% if subitem.divider %}
+                                <div class="dropdown-divider"></div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </li>
@@ -74,3 +98,17 @@
   </div>
 </nav>
 
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('.dropright button').on("click", function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+
+            if (!$(this).next('div').hasClass('show')) {
+            $(this).next('div').addClass('show');
+            } else {
+            $(this).next('div').removeClass('show');
+            }
+        });
+    });
+</script>

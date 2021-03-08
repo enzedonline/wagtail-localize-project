@@ -21,24 +21,38 @@ def get_menu(slug, page, logged_in, language_code=None):
                 menu = menu.get_translation_or_none(locale=locale)
 
         # see if there is a custom menu defined for the slug of the item
-        items = menu.menu_items.all()
+        # items = menu.menu_items.all()
+        sub_menu_items = menu.sub_menu_items.all()
+        link_menu_items = menu.link_menu_items.all()
+        
         language_code = translation.get_language()
         # create a list of all items that should be shown in the menu depending on logged_in
         menu_items = []
-        for item in items:
+        for item in sub_menu_items:
+            if item.show(logged_in):
+                menu_items.append({
+                    'order': item.menu_display_order,
+                    'title': item.title, 
+                    'slug': item.title_of_submenu, 
+                    'icon': item.icon,
+                    'is_submenu': True,
+                    'divider': item.show_divider_after_this_item,
+                })
+        for item in link_menu_items:
             trans_page = item.trans_page(language_code)
             link_page_title = trans_page.title if trans_page else None
             if item.show(logged_in):
                 menu_items.append({
+                    'order': item.menu_display_order,
                     'title': item.title, 
                     'url': item.trans_url(language_code),
-                    'slug': item.slug_of_submenu, 
-                    'page': item.trans_page(language_code), 
+                    #'page': item.trans_page(language_code), 
                     'icon': item.icon,
                     'link_page_title': link_page_title,
-                    'show_linked_page': item.show_linked_page,
-                    'is_submenu': item.is_submenu,
+                    'is_submenu': False,
+                    'divider': item.show_divider_after_this_item,
                 })
+        menu_items = sorted(menu_items, key=lambda k: k['order'])
         return menu_items
     except Menu.DoesNotExist:
         pass

@@ -5,19 +5,51 @@ from django.utils.translation import gettext_lazy as _
 from django_extensions.db.fields import AutoSlugField
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
-from wagtail.admin.edit_handlers import (FieldPanel, InlinePanel,
-                                         MultiFieldPanel, PageChooserPanel)
+from wagtail.admin.edit_handlers import (FieldPanel, HelpPanel, InlinePanel,
+                                         MultiFieldPanel, PageChooserPanel, StreamFieldPanel)
 from wagtail.core.models import Orderable
 from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.models import register_snippet
 from wagtail_localize.synctree import Page as LocalizePage, Locale
 from wagtail.core.models import TranslatableMixin
-from django import forms
+from wagtail.admin.forms import WagtailAdminPageForm
 
 from wagtaillocalize.read_only_edit_handler import ReadOnlyPanel
 
+class MenuForm(WagtailAdminPageForm):
+    """ MenuForm - provides validation for Menu & Menu Item orderables"""
+
+    def clean(self, *args, **kwargs):
+        print('cleaning')
+        cleaned_data = super().clean(*args, **kwargs)
+        print(self.formsets)
+        for form in self.formsets['sub_menu_items'].forms:
+            print(type(form))
+            if form.is_valid():
+                cleaned_form_data = form.clean()
+                cleaned_title = cleaned_form_data.get('title')
+                cleaned_image = cleaned_form_data.get('icon')
+                if (cleaned_title == None) and (cleaned_image == None):
+                    msg = _("Title and icon cannot both be left empty - must be one or both")
+                    form.add_error('title', msg)
+                    form.add_error('icon', msg)
+                # if type(form) == 'SubMenuItemForm':
+                #     if cleaned_form_data.get('title_of_submenu') == None:
+                #         form.add_error('title_of_submenu', "Sub Menu ID cannot be left blank")
+                # cleaned_url = cleaned_form_data.get('link_url')
+                # cleaned_page = cleaned_form_data.get('link_page')
+                # if (cleaned_url == None) and (cleaned_page == None):
+                #     msg = _("Linked URL and Linked Page cannot both be left empty")
+                #     form.add_error('link_url', msg)
+                #     form.add_error('link_page', msg)
+        return cleaned_data
+
 @register_snippet
 class Menu(TranslatableMixin, ClusterableModel):
+    """ Menu Class creates menus to display - validation in MenuForm
+        Holds a collection of Menu Item orderables """
+
+    base_form_class = MenuForm
 
     title = models.CharField(max_length=50)
     slug = AutoSlugField(
@@ -28,12 +60,13 @@ class Menu(TranslatableMixin, ClusterableModel):
     panels = [
         MultiFieldPanel(
             [
-                ReadOnlyPanel("slug"),
+                ReadOnlyPanel("slug"), # @TODO: find better way of displaying read-only data
             ],
             heading=_("Menu ID"),
         ),
         FieldPanel("title"),
-        InlinePanel("menu_items", label=_("Menu Item")),
+        InlinePanel("link_menu_items", label=_("Link Menu Item")),
+        InlinePanel("sub_menu_items", label=_("Submenu")),
     ]
 
     def __str__(self):
@@ -47,59 +80,33 @@ class Menu(TranslatableMixin, ClusterableModel):
             return slugify(self.title + '-' + locale_code)
 
 class MenuItem(TranslatableMixin, Orderable):
+    """ MenuItem Class - orderables to display in Menu class
+        Parent class to SubMenuItem and AutoMenuItem classes """
 
+    # hidden field, links item to menu        
     menu = ParentalKey(
         "Menu",
         related_name="menu_items",
         help_text=_("Menu to which this item belongs"),
     )
+
+    # the text to show in the menu - can only be blank if image is not also blank
     title = models.CharField(
-        max_length=50, help_text=_("Title to display in menu")
-    )
-    link_url = models.CharField(
-        max_length=500,
+        max_length=50, 
         blank=True,
         null=True,
-        help_text=_(
-            "If using link page, any text here will be appended to the page url. " +
-            "For an internal url without page link, leave off the language specific part of the url " +
-            "(ie /accounts/ not /en/accounts/)."
-        ),
+        help_text=_("Title to display in menu"),
     )
-    link_page = models.ForeignKey(
-        LocalizePage,
-        blank=True,
-        null=True,
-        related_name="+",
-        on_delete=models.CASCADE,
-        help_text=_(
-            "Use this to link to an internal page. Link to the page in the language of this menu."
-        ),
-    )
-    is_submenu = models.BooleanField(
-        default=False,
-        help_text=_("If checked, this is a drop-down menu. " +
-                    "If submenu selected below, this will be use to populate the menu items." + 
-                    "If submenu left blank, menu will autopopulate from child pages of linked page above, " + 
-                    "showing all child pages that have 'Show In Menus' selected.")
-    )
-    title_of_submenu = models.CharField(
-        blank=True,
-        null=True,
-        max_length=50,
-        help_text=_("If this is a drop-down menu heading, select the menu-ID to use, otherwise leave blank."),
-    )
-    show_linked_page = models.BooleanField(
-        default=False,
-        help_text=_("If checked, and this is a drop-down menu, linked page will be first item in sub-menu using that page's title")
-    )
+    # Optional image to display on menu - if title is blank, only image will show
     icon = models.ForeignKey(
         "wagtailimages.Image",
         blank=True,
         null=True,
         on_delete=models.SET_NULL,
         related_name="+",
+        help_text=_("Optional image to display on menu - if title is blank, only image will show")
     )
+    # show if user logged in, logged out or always
     show_when = models.CharField(
         max_length=15,
         choices=[
@@ -108,33 +115,31 @@ class MenuItem(TranslatableMixin, Orderable):
             ("not_logged_in", _("When not logged in")),
         ],
         default="always",
+        help_text=_("Determines if menu item is only shown if user logged in, logged out or always")
+    )
+    # adds a dividing line after the item if it's on a dropdown menu
+    show_divider_after_this_item = models.BooleanField(
+        default=False,
+        help_text=_("Add a dividing line after this menu item if on a dropdown menu.")
+    )
+    # allow menu items to be sorted regardless of type
+    menu_display_order = models.IntegerField(
+        default=0,
+        help_text=_("Enter digit to determine order in menu. Menu items of all types will be sorted by this number")
     )
 
-    panels = [
-        ImageChooserPanel("icon"),
-        FieldPanel("title"),
-        FieldPanel("link_url"),
-        PageChooserPanel("link_page"),
-        FieldPanel("show_when"),
-        MultiFieldPanel(
-            [
-                FieldPanel("is_submenu"),
-                FieldPanel("title_of_submenu"),
-                FieldPanel("show_linked_page"),
-            ],
-            heading="Submenu",
-            classname="collapsible collapsed",
-            ),    
-    ]
+    class Meta:
+        abstract = True
 
     def trans_page(self, language_code):
+        """ returns the translated page for a given language if it exists """
         # if no link_page, return none
         if not self.link_page:
             return None
 
         # default language, just return link_page
-        if language_code == settings.LANGUAGES[0][0]:
-            return self.link_page
+        # if language_code == settings.LANGUAGES[0][0]:
+        #     return self.link_page
 
         # if language_code locale exists, retrun translated page
         # if language_code locale doesn't exists, retrun default language page
@@ -163,8 +168,11 @@ class MenuItem(TranslatableMixin, Orderable):
     @property
     def slug_of_submenu(self):
         # becomes slug of submenu if there is one, otherwise None
-        if self.title_of_submenu:
-            return slugify(self.title_of_submenu)
+        try:   
+            if self.title_of_submenu:
+                return slugify(self.title_of_submenu)
+        except AttributeError:
+            pass
         return None
 
     def show(self, authenticated):
@@ -177,7 +185,87 @@ class MenuItem(TranslatableMixin, Orderable):
     def __str__(self):
         return self.title
 
+class LinkMenuItem(MenuItem):
 
+    # hidden field, links item to menu        
+    menu = ParentalKey(
+        "Menu",
+        related_name="link_menu_items",
+        help_text=_("Menu to which this item belongs"),
+    )
+
+    # this field can be used to provide an external url or internal url 
+    # for internal url's, must omit the language code from the url (ie /accounts/ not /en/accounts/)
+    # if used with a link page, provides a suffix to the url of that page
+    link_url = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=_(
+            "If using link page, any text here will be appended to the page url. " +
+            "For an internal url without page link, leave off the language specific part of the url " +
+            "(ie /accounts/ not /en/accounts/)."
+        ),
+    )
+    # wagtail page to link to
+    # if value entered in link_url, it will be appended to the url of this page
+    # eg link page = /blog/categories/, link_url = news -> menu item url = /blog/categories/news/
+    # useful for routable pages
+    # could also to POST arguments to a page (eg link_url = ?cat=news -> /blog/categories/?cat=news)
+    link_page = models.ForeignKey(
+        LocalizePage,
+        blank=True,
+        null=True,
+        related_name="+",
+        on_delete=models.CASCADE,
+        help_text=_(
+            "Use this to link to an internal page. Link to the page in the language of this menu."
+        ),
+    )
+
+    panels = [
+        FieldPanel("title"),
+        ImageChooserPanel("icon"),
+        PageChooserPanel("link_page"),
+        FieldPanel("link_url"),
+        FieldPanel("show_when"),
+        FieldPanel("menu_display_order"),
+        FieldPanel("show_divider_after_this_item"),
+    ]
+
+    class Meta:
+        unique_together = ('translation_key', 'locale')
+
+
+class SubMenuItem(MenuItem):
+    """ Class SubMenuItem - child of MenuItem
+        Used to add a sub menu to a parent menu - submenu must exist first """
+
+    # hidden field, links item to menu        
+    menu = ParentalKey(
+        "Menu",
+        related_name="sub_menu_items",
+        help_text=_("Menu to which this item belongs"),
+    )
+
+    title_of_submenu = models.CharField(
+        blank=False,
+        null=True,
+        max_length=50,
+        help_text=_("Enter the menu-ID that this sub-menu will load"),
+    )
+
+    panels = [
+        HelpPanel(_("Sub Menu Heading - enter title or select image or both")),
+        FieldPanel("title"),
+        ImageChooserPanel("icon"),
+        FieldPanel("title_of_submenu"),
+        FieldPanel("menu_display_order"),
+        FieldPanel("show_divider_after_this_item"),
+    ]
+
+    class Meta:
+        unique_together = ('translation_key', 'locale')
 
 @register_snippet
 class CompanyLogo(models.Model):
