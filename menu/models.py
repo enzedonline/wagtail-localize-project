@@ -61,8 +61,8 @@ class MenuItem(TranslatableMixin, Orderable):
         blank=True,
         null=True,
         help_text=_(
-            "Leave blank if linking to an internal page (see below). " +
-            "For an internal url, leave off the language specific part of the url " +
+            "If using link page, any text here will be appended to the page url. " +
+            "For an internal url without page link, leave off the language specific part of the url " +
             "(ie /accounts/ not /en/accounts/)."
         ),
     )
@@ -73,7 +73,7 @@ class MenuItem(TranslatableMixin, Orderable):
         related_name="+",
         on_delete=models.CASCADE,
         help_text=_(
-            "Use this to link to an internal page. Link to the page in the default language."
+            "Use this to link to an internal page. Link to the page in the language of this menu."
         ),
     )
     is_submenu = models.BooleanField(

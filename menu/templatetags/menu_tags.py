@@ -28,7 +28,6 @@ def get_menu(slug, page, logged_in, language_code=None):
         for item in items:
             trans_page = item.trans_page(language_code)
             link_page_title = trans_page.title if trans_page else None
-            print(item.title, item.is_submenu)
             if item.show(logged_in):
                 menu_items.append({
                     'title': item.title, 
@@ -47,25 +46,24 @@ def get_menu(slug, page, logged_in, language_code=None):
     try:
         # if there is no custom menu, then there should be a valid page argument; see if it has children
         items = page.get_children()
-
         # if so, create a list of all items that have show_in_menus == True
         menu_items = []
         for item in items:
             if item.show_in_menus:
                 menu_items.append({
                     'title': item.title, 
-                    'url': item.trans_url(language_code),
+                    'url': item.url,
                     'slug': None, 
-                    'page': item.trans_page(language_code), 
+                    'page': item, 
                     'icon': None,
-                    'link_page_title': link_page_title,
-                    'show_linked_page': item.show_linked_page,
+                    'show_linked_page': False,
                     'is_submenu': True,
                 })
         return menu_items
 
     except AttributeError:
         # neither custom menu nor valid page argument; return None
+        print('error')
         return None
 
 @register.simple_tag()
