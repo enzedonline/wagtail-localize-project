@@ -1,12 +1,13 @@
 from django.conf import settings
 from django.db import models
+from django.forms.widgets import Select
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.fields import AutoSlugField
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
 from wagtail.admin.edit_handlers import (FieldPanel, HelpPanel, InlinePanel,
-                                         MultiFieldPanel, PageChooserPanel, StreamFieldPanel)
+                                         MultiFieldPanel, PageChooserPanel)
 from wagtail.core.models import Orderable
 from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.models import register_snippet
@@ -20,28 +21,31 @@ class MenuForm(WagtailAdminPageForm):
     """ MenuForm - provides validation for Menu & Menu Item orderables"""
 
     def clean(self, *args, **kwargs):
-        print('cleaning')
         cleaned_data = super().clean(*args, **kwargs)
-        print(self.formsets)
         for form in self.formsets['sub_menu_items'].forms:
-            print(type(form))
+            if form.is_valid():
+                cleaned_form_data = form.clean()
+                if cleaned_form_data.get('title_of_submenu') == None:
+                    form.add_error('title_of_submenu', "Sub Menu ID cannot be left blank")
+                elif cleaned_form_data.get('title_of_submenu') == self.data['slug']:
+                    form.add_error('title_of_submenu', "Parent Menu cannot be a Sub Menu of itself")
+        for form in self.formsets['link_menu_items'].forms:
             if form.is_valid():
                 cleaned_form_data = form.clean()
                 cleaned_title = cleaned_form_data.get('title')
                 cleaned_image = cleaned_form_data.get('icon')
-                if (cleaned_title == None) and (cleaned_image == None):
-                    msg = _("Title and icon cannot both be left empty - must be one or both")
+                cleaned_url = cleaned_form_data.get('link_url')
+                cleaned_page = cleaned_form_data.get('link_page')
+                if (cleaned_title == None) and (cleaned_image == None) and (cleaned_page == None):
+                    msg = _("Title, icon and linked page cannot all be left empty. ")
                     form.add_error('title', msg)
                     form.add_error('icon', msg)
-                # if type(form) == 'SubMenuItemForm':
-                #     if cleaned_form_data.get('title_of_submenu') == None:
-                #         form.add_error('title_of_submenu', "Sub Menu ID cannot be left blank")
-                # cleaned_url = cleaned_form_data.get('link_url')
-                # cleaned_page = cleaned_form_data.get('link_page')
-                # if (cleaned_url == None) and (cleaned_page == None):
-                #     msg = _("Linked URL and Linked Page cannot both be left empty")
-                #     form.add_error('link_url', msg)
-                #     form.add_error('link_page', msg)
+                    form.add_error('link_page', msg)
+                if (cleaned_url == None) and (cleaned_page == None):
+                    msg = _("Linked URL and Linked Page cannot both be left empty. ")
+                    form.add_error('link_url', msg)
+                    form.add_error('link_page', msg)
+
         return cleaned_data
 
 @register_snippet
@@ -51,22 +55,41 @@ class Menu(TranslatableMixin, ClusterableModel):
 
     base_form_class = MenuForm
 
-    title = models.CharField(max_length=50)
+    title = models.CharField(
+        max_length=50,
+        help_text=_("Title will be used if this is a submenu")
+    )
     slug = AutoSlugField(
         populate_from="title",
-        editable=False,
+#        editable=False,
+    )
+    # Optional image to display if submenu
+    icon = models.ForeignKey(
+        "wagtailimages.Image",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("Optional image to display if submenu")
     )
 
     panels = [
         MultiFieldPanel(
             [
-                ReadOnlyPanel("slug"), # @TODO: find better way of displaying read-only data
+                ReadOnlyPanel("slug", heading="Menu ID",),
+                FieldPanel("title"),
+                ImageChooserPanel("icon"),
             ],
-            heading=_("Menu ID"),
+            heading=_("Menu Heading"),
         ),
-        FieldPanel("title"),
-        InlinePanel("link_menu_items", label=_("Link Menu Item")),
-        InlinePanel("sub_menu_items", label=_("Submenu")),
+        MultiFieldPanel(
+            [
+                HelpPanel(_("Items in the menu will be arranged by 'Menu Display Order' over the order in which they appear below.")),
+                InlinePanel("sub_menu_items", label=_("Sub-menu")),
+                InlinePanel("link_menu_items", label=_("Link")),
+            ],
+            heading=_("Menu Items - Add items to show in the menu below"),
+        ),
     ]
 
     def __str__(self):
@@ -90,22 +113,6 @@ class MenuItem(TranslatableMixin, Orderable):
         help_text=_("Menu to which this item belongs"),
     )
 
-    # the text to show in the menu - can only be blank if image is not also blank
-    title = models.CharField(
-        max_length=50, 
-        blank=True,
-        null=True,
-        help_text=_("Title to display in menu"),
-    )
-    # Optional image to display on menu - if title is blank, only image will show
-    icon = models.ForeignKey(
-        "wagtailimages.Image",
-        blank=True,
-        null=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-        help_text=_("Optional image to display on menu - if title is blank, only image will show")
-    )
     # show if user logged in, logged out or always
     show_when = models.CharField(
         max_length=15,
@@ -194,6 +201,24 @@ class LinkMenuItem(MenuItem):
         help_text=_("Menu to which this item belongs"),
     )
 
+    # the text to show in the menu - can only be blank if image is not also blank
+    # or blank if link page (link page title will be used)
+    title = models.CharField(
+        max_length=50, 
+        blank=True,
+        null=True,
+        help_text=_("Title to display in menu"),
+    )
+    # Optional image to display on menu - if title is blank, only image will show
+    icon = models.ForeignKey(
+        "wagtailimages.Image",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("Optional image to display on menu - if title is blank, only image will show")
+    )
+
     # this field can be used to provide an external url or internal url 
     # for internal url's, must omit the language code from the url (ie /accounts/ not /en/accounts/)
     # if used with a link page, provides a suffix to the url of that page
@@ -236,7 +261,20 @@ class LinkMenuItem(MenuItem):
     class Meta:
         unique_together = ('translation_key', 'locale')
 
+class SubMenuListIterator(object):
 
+    locale = None
+
+    def __init__(self, locale) -> None:
+        super().__init__()
+        self.locale = locale
+
+    def __iter__(self):
+        menu_list = list(Menu.objects.values_list('slug','title').filter(locale=self.locale))
+    #     parent_menu = Menu.objects.get(id=menu)
+    #     menu_list = Menu.objects.values_list('slug','title').filter(locale=parent_menu.locale).exclude(id=menu)
+        return menu_list.__iter__()
+        
 class SubMenuItem(MenuItem):
     """ Class SubMenuItem - child of MenuItem
         Used to add a sub menu to a parent menu - submenu must exist first """
@@ -248,18 +286,33 @@ class SubMenuItem(MenuItem):
         help_text=_("Menu to which this item belongs"),
     )
 
+    lang=Locale.objects.get(language_code=settings.LANGUAGES[0][0])
+    choice_list=SubMenuListIterator(lang)
+    submenu_selector=Select()
+    submenu_selector.choices = choice_list
+
     title_of_submenu = models.CharField(
         blank=False,
         null=True,
         max_length=50,
         help_text=_("Enter the menu-ID that this sub-menu will load"),
+        choices=choice_list
     )
-
+    # show if user logged in, logged out or always
+    display_option = models.CharField(
+        max_length=4,
+        choices=[
+            ("both", _("Icon & Title")),
+            ("text", _("Title Only")),
+            ("icon", _("Icon Only")),
+        ],
+        default="text",
+        help_text=_("Display the sub-menu as icon, text or both.")
+    )
     panels = [
-        HelpPanel(_("Sub Menu Heading - enter title or select image or both")),
-        FieldPanel("title"),
-        ImageChooserPanel("icon"),
+        HelpPanel(_("Select the menu that this sub-menu will load")),
         FieldPanel("title_of_submenu"),
+        FieldPanel("display_option"),
         FieldPanel("menu_display_order"),
         FieldPanel("show_divider_after_this_item"),
     ]

@@ -28,10 +28,19 @@ class ReadOnlyPanel(EditHandler):
             '</fieldset>',
             self.heading, self.render())
 
+    def hidden_input(self):
+        value = getattr(self.instance, self.attr)
+        if callable(value):
+            value = value()
+        input = f'<input type="hidden" name="{self.attr}" value="{value}" maxlength="50" id="id_{self.attr}">'
+        return format_html(input)
+
     def render_as_field(self):
         return format_html(
             '<div class="field">'
             '<label>{}{}</label>'
             '<div class="field-content">{}</div>'
-            '</div>',
-            self.heading, ':', self.render())
+            '{}'            
+            '</div>'
+            ,
+            self.heading, ':', self.render(), self.hidden_input())
