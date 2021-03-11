@@ -29,6 +29,7 @@ def get_menu_items(menu, logged_in, language_code=None):
         # gather all menu item type, sort by menu_display_order at the end
         sub_menu_items = menu.sub_menu_items.all()
         link_menu_items = menu.link_menu_items.all()
+        autofill_menu_items = menu.autofill_menu_items.all()
                     
         # create a list of all items that should be shown in the menu depending on logged_in
         menu_items = []
@@ -49,45 +50,38 @@ def get_menu_items(menu, logged_in, language_code=None):
                     'order': item.menu_display_order,
                     'title': item.title, 
                     'url': item.trans_url(language_code),
-                    #'page': item.trans_page(language_code), 
                     'icon': item.icon,
                     'link_page_title': link_page_title,
                     'is_submenu': False,
                     'divider': item.show_divider_after_this_item,
                 })
+        for item in autofill_menu_items:
+            trans_page = item.trans_page(language_code)
+            if trans_page:
+                if logged_in:
+                    list = trans_page.get_children().live().order_by(item.order_by)[:item.max_items]
+                else:
+                    list = trans_page.get_children().live().public().order_by(item.order_by)[:item.max_items]
+                if list:
+                    i = 0
+                    for result in list:
+                        menu_items.append({
+                            'order': item.menu_display_order + i/(item.max_items + 1),
+                            'title': result.title, 
+                            'url': result.url,
+                            'is_submenu': False,                            
+                        })
+                        i+=1
+                    menu_items[-1]['divider'] = item.show_divider_after_this_item
         menu_items = sorted(menu_items, key=lambda k: k['order'])
         return menu_items
     except Menu.DoesNotExist:
         return None
 
-    # try:
-    #     # if there is no custom menu, then there should be a valid page argument; see if it has children
-    #     items = page.get_children()
-    #     # if so, create a list of all items that have show_in_menus == True
-    #     menu_items = []
-    #     for item in items:
-    #         if item.show_in_menus:
-    #             menu_items.append({
-    #                 'title': item.title, 
-    #                 'url': item.url,
-    #                 'slug': None, 
-    #                 'page': item, 
-    #                 'icon': None,
-    #                 'show_linked_page': False,
-    #                 'is_submenu': True,
-    #             })
-    #     return menu_items
-
-    # except AttributeError:
-    #     # neither custom menu nor valid page argument; return None
-    #     print('error')
-    #     return None
-
 @register.simple_tag()
 def get_menu(menu_slug):
     try:
         menu = Menu.objects.get(slug=menu_slug)
-        print(menu)
     except AttributeError:
         return None
     return menu

@@ -1,6 +1,9 @@
+from datetime import datetime
+
 from django.conf import settings
 from django.db import models
 from django.forms.widgets import Select
+from django.utils.datastructures import MultiValueDictKeyError
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.fields import AutoSlugField
@@ -8,27 +11,34 @@ from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
 from wagtail.admin.edit_handlers import (FieldPanel, HelpPanel, InlinePanel,
                                          MultiFieldPanel, PageChooserPanel)
-from wagtail.core.models import Orderable
+from wagtail.admin.forms import WagtailAdminPageForm
+from wagtail.core.models import Orderable, TranslatableMixin
 from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.models import register_snippet
-from wagtail_localize.synctree import Page as LocalizePage, Locale
-from wagtail.core.models import TranslatableMixin
-from wagtail.admin.forms import WagtailAdminPageForm
+from wagtail_localize.synctree import Locale
+from wagtail_localize.synctree import Page as LocalizePage
+from wagtaillocalize.edit_handlers import ReadOnlyPanel, RichHelpPanel
 
-from wagtaillocalize.read_only_edit_handler import ReadOnlyPanel
 
 class MenuForm(WagtailAdminPageForm):
-    """ MenuForm - provides validation for Menu & Menu Item orderables"""
+    """ MenuForm - provides validation for Menu & Menu Item orderables
+        self.data['slug'] comes from the read_only_edit_handler which injects a 
+        hidden form field that isn't included in the cleaned_data"""
 
     def clean(self, *args, **kwargs):
         cleaned_data = super().clean(*args, **kwargs)
         for form in self.formsets['sub_menu_items'].forms:
             if form.is_valid():
                 cleaned_form_data = form.clean()
+                try:
+                    parent_slug = self.data['slug']
+                except MultiValueDictKeyError:
+                    parent_slug = None
                 if cleaned_form_data.get('title_of_submenu') == None:
                     form.add_error('title_of_submenu', "Sub Menu ID cannot be left blank")
-                elif cleaned_form_data.get('title_of_submenu') == self.data['slug']:
-                    form.add_error('title_of_submenu', "Parent Menu cannot be a Sub Menu of itself")
+                if parent_slug != None:
+                    if cleaned_form_data.get('title_of_submenu') == self.data['slug']:
+                        form.add_error('title_of_submenu', "Parent Menu cannot be a Sub Menu of itself")
         for form in self.formsets['link_menu_items'].forms:
             if form.is_valid():
                 cleaned_form_data = form.clean()
@@ -61,7 +71,6 @@ class Menu(TranslatableMixin, ClusterableModel):
     )
     slug = AutoSlugField(
         populate_from="title",
-#        editable=False,
     )
     # Optional image to display if submenu
     icon = models.ForeignKey(
@@ -73,10 +82,15 @@ class Menu(TranslatableMixin, ClusterableModel):
         help_text=_("Optional image to display if submenu")
     )
 
+    msg=_('Items in the menu will be arranged by <b>Menu Display Order</b> over the order in which they appear below.<br><a href="/admin/docs" target="_blank">Read More</a>')
+    msg=_('This snippet\'s slug is <b>{{title}}</b>.<br>Today\'s date is {{today}}<br><a href="/somepage" target="_blank">Read More</a>')
+    values={'title': 'slug', 'today': datetime.today().strftime('%d-%B-%Y')}
+    style="margin-top: -1.5em; margin-bottom: -1.5em;"
+    style="color:blue;text-align:center"
     panels = [
         MultiFieldPanel(
             [
-                ReadOnlyPanel("slug", heading="Menu ID",),
+                ReadOnlyPanel("slug", heading="Menu ID", add_hidden_input=True),
                 FieldPanel("title"),
                 ImageChooserPanel("icon"),
             ],
@@ -84,11 +98,35 @@ class Menu(TranslatableMixin, ClusterableModel):
         ),
         MultiFieldPanel(
             [
-                HelpPanel(_("Items in the menu will be arranged by 'Menu Display Order' over the order in which they appear below.")),
+                RichHelpPanel(
+                    msg, 
+                    style=style,
+                    value_dict=values,
+                    heading=_("Rich Help Test")
+                ),
+            ],
+            heading=_("Menu Items - Add items to show in the menu below. "),
+        ),
+        MultiFieldPanel(
+            [
                 InlinePanel("sub_menu_items", label=_("Sub-menu")),
+            ],
+            heading="Submenus",
+            classname="collapsible collapsed",
+        ),
+        MultiFieldPanel(
+            [
                 InlinePanel("link_menu_items", label=_("Link")),
             ],
-            heading=_("Menu Items - Add items to show in the menu below"),
+            heading="Links",
+            classname="collapsible collapsed",
+        ),
+        MultiFieldPanel(
+            [
+                InlinePanel("autofill_menu_items", label=_("Autofill Link")),
+            ],
+            heading="Autofill Link",
+            classname="collapsible collapsed",
         ),
     ]
 
@@ -131,7 +169,7 @@ class MenuItem(TranslatableMixin, Orderable):
     )
     # allow menu items to be sorted regardless of type
     menu_display_order = models.IntegerField(
-        default=0,
+        default=200,
         help_text=_("Enter digit to determine order in menu. Menu items of all types will be sorted by this number")
     )
 
@@ -254,6 +292,83 @@ class LinkMenuItem(MenuItem):
         PageChooserPanel("link_page"),
         FieldPanel("link_url"),
         FieldPanel("show_when"),
+        FieldPanel("menu_display_order"),
+        FieldPanel("show_divider_after_this_item"),
+    ]
+
+    class Meta:
+        unique_together = ('translation_key', 'locale')
+
+class AutofillMenuItem(MenuItem):
+
+    # hidden field, links item to menu        
+    menu = ParentalKey(
+        "Menu",
+        related_name="autofill_menu_items",
+        help_text=_("Menu to which this item belongs"),
+    )
+
+    # optional description to describe what this item will load
+    description = models.CharField(
+        max_length=50, 
+        blank=True,
+        null=True,
+        help_text=_("Optional field to describe what this item will load"),
+    )
+
+    # this field can be used to provide an external url or internal url 
+    # for internal url's, must omit the language code from the url (ie /accounts/ not /en/accounts/)
+    # if used with a link page, provides a suffix to the url of that page
+    link_url = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=_(
+            "If using link page, any text here will be appended to the page url. " +
+            "For an internal url without page link, leave off the language specific part of the url " +
+            "(ie /accounts/ not /en/accounts/)."
+        ),
+    )
+    # wagtail page to link to
+    # if value entered in link_url, it will be appended to the url of this page
+    # eg link page = /blog/categories/, link_url = news -> menu item url = /blog/categories/news/
+    # useful for routable pages
+    # could also to POST arguments to a page (eg link_url = ?cat=news -> /blog/categories/?cat=news)
+    link_page = models.ForeignKey(
+        LocalizePage,
+        blank=True,
+        null=True,
+        related_name="+",
+        on_delete=models.CASCADE,
+        help_text=_(
+            "Use this to link to an internal page. Link to the page in the language of this menu."
+        ),
+    )
+
+    max_items = models.IntegerField(
+        default=4,
+        blank=False,
+        help_text=_("Maximum results to display in the menu")
+    )
+
+    # the page order that the results will come from and display in
+    order_by = models.CharField(
+        max_length=20,
+        choices=[
+            ("-last_published_at", _("Newest (by most recently updated")),
+            ("-first_published_at", _("Newest to Oldest (by date originally published")),
+            ("first_published_at", _("Oldest to Newest")),
+        ],
+        default="-first_published_at",
+        help_text=_("Choose the order in which to take results")
+    )
+    panels = [
+        FieldPanel("description"),
+        PageChooserPanel("link_page"),
+        FieldPanel("link_url"),
+        FieldPanel("max_items"),
+        FieldPanel("show_when"),
+        FieldPanel("order_by"),
         FieldPanel("menu_display_order"),
         FieldPanel("show_divider_after_this_item"),
     ]
