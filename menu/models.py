@@ -1,12 +1,7 @@
-from datetime import datetime
-
-from django.conf import settings
 from django.db import models
 from django.forms.widgets import Select
 from django.utils.datastructures import MultiValueDictKeyError
-from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-from django_extensions.db.fields import AutoSlugField
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
 from wagtail.admin.edit_handlers import (FieldPanel, HelpPanel, InlinePanel,
@@ -17,12 +12,27 @@ from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.models import register_snippet
 from wagtail_localize.synctree import Locale
 from wagtail_localize.synctree import Page as LocalizePage
-from wagtaillocalize.edit_handlers import ReadOnlyPanel, RichHelpPanel
 
+from .edit_handlers import ReadOnlyPanel, RichHelpPanel, SubMenuFieldPanel
+from .fluid_iterator import FluidIterable
+
+class MenuListQuerySet(object):
+    # Call as class()() to act as a function call, passes all menus to SubMenuPanel dropdown
+    # Useful to make a function call in class declaration to make dynamic class variables 
+    def __call__(self, *args, **kwds):
+        return Menu.objects.all()
+        
+# class MenuFormMetaclass(WagtailAdminModelFormMetaclass):
+    # Leaving in commented for future reference - when you want to have a custom form class for your orderables
+    # use this to declare it. 
+    # Parent form class needs to be declared as class MenuForm(WagtailAdminPageForm, metaclass=MenuFormMetaclass)
+    # @classmethod
+    # def child_form(cls):
+    #     return MenuItemForm
 
 class MenuForm(WagtailAdminPageForm):
     """ MenuForm - provides validation for Menu & Menu Item orderables
-        self.data['slug'] comes from the read_only_edit_handler which injects a 
+        self.data['id'] comes from the read_only_edit_handler which injects a 
         hidden form field that isn't included in the cleaned_data"""
 
     def clean(self, *args, **kwargs):
@@ -31,13 +41,13 @@ class MenuForm(WagtailAdminPageForm):
             if form.is_valid():
                 cleaned_form_data = form.clean()
                 try:
-                    parent_slug = self.data['slug']
-                except MultiValueDictKeyError:
-                    parent_slug = None
-                if cleaned_form_data.get('title_of_submenu') == None:
+                    parent_id = self.data['id']
+                except MultiValueDictKeyError as e:
+                    parent_id = None
+                if cleaned_form_data.get('submenu_id') == None:
                     form.add_error('title_of_submenu', "Sub Menu ID cannot be left blank")
-                if parent_slug != None:
-                    if cleaned_form_data.get('title_of_submenu') == self.data['slug']:
+                if parent_id != None:
+                    if cleaned_form_data.get('submenu_id') == parent_id:
                         form.add_error('title_of_submenu', "Parent Menu cannot be a Sub Menu of itself")
         for form in self.formsets['link_menu_items'].forms:
             if form.is_valid():
@@ -55,13 +65,92 @@ class MenuForm(WagtailAdminPageForm):
                     msg = _("Linked URL and Linked Page cannot both be left empty. ")
                     form.add_error('link_url', msg)
                     form.add_error('link_page', msg)
+        for form in self.formsets['autofill_menu_items'].forms:
+            if form.is_valid():
+                cleaned_form_data = form.clean()
+                cleaned_page = cleaned_form_data.get('link_page')
+                if cleaned_page == None:
+                    msg = _("Linked page cannot all be left empty. ")
+                    form.add_error('link_page', msg)
 
         return cleaned_data
+
+class MenuPanelsIterable(object):
+    # Build the panels as an iterable. Probably not necessary here but it could be useful for a bit
+    # of dynamic panel building later on
+    # The panels for the submenu form are built here and passed into the InlinePanel rather than declared in 
+    # the model itself
+
+    def __iter__(self):
+        # build submenu panels, including the FluidIterable for the widget
+        submenu_selector=Select()
+        submenu_selector.choices = FluidIterable([])
+        submenu_panels = [
+            HelpPanel(_("Select the menu that this sub-menu will load")),
+            SubMenuFieldPanel("submenu_id", MenuListQuerySet()(), widget=submenu_selector),
+            FieldPanel("display_option"),
+            FieldPanel("menu_display_order"),
+            FieldPanel("show_divider_after_this_item"),
+        ]
+
+        # two custom panels here:
+        # ReadOnlyPanel - displays field as a non-field text, optionally adds a hidden input field to 
+        #                 allow accessing that field in the clean() method
+        # RichHelpPanel - like a django template, swap out {{vars}} for values (field or function returns)
+        #                 also allows basic html (formatting, links etc)
+
+        msg=_('Items in the menu will be arranged by <b>Menu Display Order</b> over the order in which they appear below.')
+        style="margin-top: -1.5em; margin-bottom: -1.5em;"
+        panels = [
+            MultiFieldPanel(
+                [
+                    ReadOnlyPanel("id", heading="Menu ID", add_hidden_input=True),
+                    FieldPanel("title"),
+                    ImageChooserPanel("icon"),
+                ],
+                heading=_("Menu Heading"),
+            ),
+            MultiFieldPanel(
+                [
+                    RichHelpPanel(
+                        msg, 
+                        style=style,
+                    ),
+                ],
+                heading=_("Menu Items - Add items to show in the menu below. "),
+            ),
+            MultiFieldPanel(
+                [
+                    InlinePanel("sub_menu_items", label=_("Sub-menu"), panels=submenu_panels)
+                ],
+                heading="Submenus",
+                classname="collapsible collapsed",
+            ),
+            MultiFieldPanel(
+                [
+                    InlinePanel("link_menu_items", label=_("Link")),
+                ],
+                heading="Links",
+                classname="collapsible collapsed",
+            ),
+            MultiFieldPanel(
+                [
+                    InlinePanel("autofill_menu_items", label=_("Autofill Link")),
+                ],
+                heading="Autofill Links",
+                classname="collapsible collapsed",
+            ),
+        ]
+        panels = [HelpPanel(str('ak'))] + panels
+        return panels.__iter__()
 
 @register_snippet
 class Menu(TranslatableMixin, ClusterableModel):
     """ Menu Class creates menus to display - validation in MenuForm
         Holds a collection of Menu Item orderables """
+    
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
     base_form_class = MenuForm
 
@@ -69,9 +158,7 @@ class Menu(TranslatableMixin, ClusterableModel):
         max_length=50,
         help_text=_("Title will be used if this is a submenu")
     )
-    slug = AutoSlugField(
-        populate_from="title",
-    )
+
     # Optional image to display if submenu
     icon = models.ForeignKey(
         "wagtailimages.Image",
@@ -81,64 +168,11 @@ class Menu(TranslatableMixin, ClusterableModel):
         related_name="+",
         help_text=_("Optional image to display if submenu")
     )
-
-    msg=_('Items in the menu will be arranged by <b>Menu Display Order</b> over the order in which they appear below.<br><a href="/admin/docs" target="_blank">Read More</a>')
-    msg=_('This snippet\'s slug is <b>{{title}}</b>.<br>Today\'s date is {{today}}<br><a href="/somepage" target="_blank">Read More</a>')
-    values={'title': 'slug', 'today': datetime.today().strftime('%d-%B-%Y')}
-    style="margin-top: -1.5em; margin-bottom: -1.5em;"
-    style="color:blue;text-align:center"
-    panels = [
-        MultiFieldPanel(
-            [
-                ReadOnlyPanel("slug", heading="Menu ID", add_hidden_input=True),
-                FieldPanel("title"),
-                ImageChooserPanel("icon"),
-            ],
-            heading=_("Menu Heading"),
-        ),
-        MultiFieldPanel(
-            [
-                RichHelpPanel(
-                    msg, 
-                    style=style,
-                    value_dict=values,
-                    heading=_("Rich Help Test")
-                ),
-            ],
-            heading=_("Menu Items - Add items to show in the menu below. "),
-        ),
-        MultiFieldPanel(
-            [
-                InlinePanel("sub_menu_items", label=_("Sub-menu")),
-            ],
-            heading="Submenus",
-            classname="collapsible collapsed",
-        ),
-        MultiFieldPanel(
-            [
-                InlinePanel("link_menu_items", label=_("Link")),
-            ],
-            heading="Links",
-            classname="collapsible collapsed",
-        ),
-        MultiFieldPanel(
-            [
-                InlinePanel("autofill_menu_items", label=_("Autofill Link")),
-            ],
-            heading="Autofill Link",
-            classname="collapsible collapsed",
-        ),
-    ]
+    
+    panels = MenuPanelsIterable()
 
     def __str__(self):
         return self.title
-
-    def slugify_function(self, content):
-        locale_code = self.locale.language_code
-        if locale_code == settings.LANGUAGES[0][0]:
-            return slugify(self.title)
-        else:
-            return slugify(self.title + '-' + locale_code)
 
 class MenuItem(TranslatableMixin, Orderable):
     """ MenuItem Class - orderables to display in Menu class
@@ -150,7 +184,7 @@ class MenuItem(TranslatableMixin, Orderable):
         related_name="menu_items",
         help_text=_("Menu to which this item belongs"),
     )
-
+    
     # show if user logged in, logged out or always
     show_when = models.CharField(
         max_length=15,
@@ -210,16 +244,6 @@ class MenuItem(TranslatableMixin, Orderable):
             return self.link_url
         return None
 
-    @property
-    def slug_of_submenu(self):
-        # becomes slug of submenu if there is one, otherwise None
-        try:   
-            if self.title_of_submenu:
-                return slugify(self.title_of_submenu)
-        except AttributeError:
-            pass
-        return None
-
     def show(self, authenticated):
         return (
             (self.show_when == "always")
@@ -231,7 +255,12 @@ class MenuItem(TranslatableMixin, Orderable):
         return self.title
 
 class LinkMenuItem(MenuItem):
-
+    """
+    Creates a standard link item for the menu.
+    Use page link for internal pages, url for external links or routable pages
+    If both are used, the text in url is appended to the page url 
+    (eg /blog/catgories/ + events or /blog/ + ?cat=events)
+    """
     # hidden field, links item to menu        
     menu = ParentalKey(
         "Menu",
@@ -300,7 +329,14 @@ class LinkMenuItem(MenuItem):
         unique_together = ('translation_key', 'locale')
 
 class AutofillMenuItem(MenuItem):
-
+    """
+    Creates links dynamically on the menu based on criteria
+    Link to a page, choose what to return (most recent publish, most recent update, oldest), 
+    and how many results to return. Also, if to include the linked page itself or not.
+    This will not iterate down or create nested menus, for linear auto-fill only.
+    To add another layer, create a submenu and add another autofill there.
+    @TODO - look at autofilling from routable pages or other non-page urls
+    """
     # hidden field, links item to menu        
     menu = ParentalKey(
         "Menu",
@@ -313,22 +349,9 @@ class AutofillMenuItem(MenuItem):
         max_length=50, 
         blank=True,
         null=True,
-        help_text=_("Optional field to describe what this item will load"),
+        help_text=_("Optional field to describe what this item will load. Titles will come from the pages."),
     )
 
-    # this field can be used to provide an external url or internal url 
-    # for internal url's, must omit the language code from the url (ie /accounts/ not /en/accounts/)
-    # if used with a link page, provides a suffix to the url of that page
-    link_url = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True,
-        help_text=_(
-            "If using link page, any text here will be appended to the page url. " +
-            "For an internal url without page link, leave off the language specific part of the url " +
-            "(ie /accounts/ not /en/accounts/)."
-        ),
-    )
     # wagtail page to link to
     # if value entered in link_url, it will be appended to the url of this page
     # eg link page = /blog/categories/, link_url = news -> menu item url = /blog/categories/news/
@@ -345,6 +368,16 @@ class AutofillMenuItem(MenuItem):
         ),
     )
 
+    include_linked_page = models.BooleanField(
+        verbose_name = _("Include Linked Page in Menu"),
+        default=False,
+        help_text=_("If selected, linked page will included before auto-filled items followed by dividing line")
+    )
+    only_show_in_menus = models.BooleanField(
+        verbose_name = _("Include only 'Show In Menu' pages"),
+        default=False,
+        help_text=_("If selected, only pages with 'Show In Menu' selected will be shown.")
+    )
     max_items = models.IntegerField(
         default=4,
         blank=False,
@@ -355,8 +388,8 @@ class AutofillMenuItem(MenuItem):
     order_by = models.CharField(
         max_length=20,
         choices=[
-            ("-last_published_at", _("Newest (by most recently updated")),
-            ("-first_published_at", _("Newest to Oldest (by date originally published")),
+            ("-last_published_at", _("Newest (by most recently updated)")),
+            ("-first_published_at", _("Newest to Oldest (by date originally published)")),
             ("first_published_at", _("Oldest to Newest")),
         ],
         default="-first_published_at",
@@ -365,7 +398,8 @@ class AutofillMenuItem(MenuItem):
     panels = [
         FieldPanel("description"),
         PageChooserPanel("link_page"),
-        FieldPanel("link_url"),
+        FieldPanel("include_linked_page"),
+        FieldPanel("only_show_in_menus"),
         FieldPanel("max_items"),
         FieldPanel("show_when"),
         FieldPanel("order_by"),
@@ -376,23 +410,13 @@ class AutofillMenuItem(MenuItem):
     class Meta:
         unique_together = ('translation_key', 'locale')
 
-class SubMenuListIterator(object):
-
-    locale = None
-
-    def __init__(self, locale) -> None:
-        super().__init__()
-        self.locale = locale
-
-    def __iter__(self):
-        menu_list = list(Menu.objects.values_list('slug','title').filter(locale=self.locale))
-    #     parent_menu = Menu.objects.get(id=menu)
-    #     menu_list = Menu.objects.values_list('slug','title').filter(locale=parent_menu.locale).exclude(id=menu)
-        return menu_list.__iter__()
-        
 class SubMenuItem(MenuItem):
     """ Class SubMenuItem - child of MenuItem
-        Used to add a sub menu to a parent menu - submenu must exist first """
+        Used to add a sub menu to a parent menu - submenu must exist first 
+        Panels declared in Menu Class
+        Uses custom SubMenuPanel to filter drop down list of menus you can select
+        List is filtered to only the same language as parent menu, and exclude parent menu itself
+    """
 
     # hidden field, links item to menu        
     menu = ParentalKey(
@@ -401,18 +425,14 @@ class SubMenuItem(MenuItem):
         help_text=_("Menu to which this item belongs"),
     )
 
-    lang=Locale.objects.get(language_code=settings.LANGUAGES[0][0])
-    choice_list=SubMenuListIterator(lang)
-    submenu_selector=Select()
-    submenu_selector.choices = choice_list
-
-    title_of_submenu = models.CharField(
+    # kind of a foreign key, but to the menu table - link to load another menu as submenu
+    submenu_id = models.IntegerField(
         blank=False,
         null=True,
-        max_length=50,
-        help_text=_("Enter the menu-ID that this sub-menu will load"),
-        choices=choice_list
+        help_text=_("Select the sub-menu to load"),
+        verbose_name=_("Submenu")
     )
+
     # show if user logged in, logged out or always
     display_option = models.CharField(
         max_length=4,
@@ -424,13 +444,8 @@ class SubMenuItem(MenuItem):
         default="text",
         help_text=_("Display the sub-menu as icon, text or both.")
     )
-    panels = [
-        HelpPanel(_("Select the menu that this sub-menu will load")),
-        FieldPanel("title_of_submenu"),
-        FieldPanel("display_option"),
-        FieldPanel("menu_display_order"),
-        FieldPanel("show_divider_after_this_item"),
-    ]
+
+    # panels = [Declared in Menu and added to InlinePanel]
 
     class Meta:
         unique_together = ('translation_key', 'locale')

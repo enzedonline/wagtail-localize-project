@@ -2,19 +2,21 @@
 {% load static i18n %}
 
 {% get_current_language as LANGUAGE_CODE %}
-{% get_menu "header" as main_menu %}
+{% get_menu 1 as main_menu %}
 {% if main_menu %}
     {% get_menu_items main_menu request.user.is_authenticated LANGUAGE_CODE as navigation %}
 {% endif %}
 {% company_logo as logo %}
-        
+
+<link rel="stylesheet" href="{% static '/css/wagtaillocalize.css'%}">
+
 <nav class="navbar navbar-expand-md navbar-dark bg-primary">
   <a class="navbar-brand" href="/">Wagtail Localize Test</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
 
-  <div class="collapse navbar-collapse" id="navbarColor01">
+  <div class="collapse navbar-collapse w-100 order-1 order-md-0 dual-collapse2" id="navbarColor01">
     <ul class="navbar-nav mr-auto">
         {% for item in navigation %}
             {% if not item.is_submenu %}
@@ -31,9 +33,9 @@
                     </a>
                 </li>
             {% else %}
-                {% get_menu item.slug as sub_menu %}
+                {% get_menu item.submenu_id as sub_menu %}
                 {% if sub_menu %}
-                    {% get_menu_items sub_menu request.user.is_authenticated as sub_menu_items %}
+                    {% get_menu_items sub_menu request.user.is_authenticated LANGUAGE_CODE as sub_menu_items %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" id="navbardrop" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
                             {% if item.display_option != 'text' and sub_menu.icon %}
@@ -54,9 +56,9 @@
                                         {% endif %}
                                     </a>
                                 {% else %}
-                                    {% get_menu subitem.slug as subsubmenu %}
+                                    {% get_menu subitem.submenu_id as subsubmenu %}
                                     {% if subsubmenu %}
-                                        {% get_menu_items subsubmenu request.user.is_authenticated as sub_sub_menu_items %}
+                                        {% get_menu_items subsubmenu request.user.is_authenticated LANGUAGE_CODE as sub_sub_menu_items %}
                                         <div class="dropright"> 
                                             <button class="btn btn-dark bg-transparent dropdown-toggle" data-toggle="dropdown">
                                                 {% if subitem.display_option != 'text' and subsubmenu.icon %}
@@ -91,6 +93,10 @@
                 {% endif %}
             {% endif %}
         {% endfor %}
+    </ul>
+  </div>
+  <div class="navbar-collapse collapse w-100 order-3 dual-collapse2">
+    <ul class="navbar-nav ml-auto pb-2">    
         <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
                 <img src="{% get_lang_flag LANGUAGE_CODE %}">

@@ -8,23 +8,39 @@ register = template.Library()
 
 @register.simple_tag()
 def get_menu_items(menu, logged_in, language_code=None):
-    # returns a list of dicts with title, url, slug, page and icon of all items in the menu
-    # use the slug of the default language
+    # returns a list of dicts with title, url, page and icon of all items in the menu
+    # use get_menu first to load the menu object then pass that instance to this function
+
     if menu == None:
         return None
+
+    if not isinstance(menu, Menu):
+        if isinstance(menu, int):
+            # menu id supplied instead of menu instance
+            menu = get_menu(menu)
+        if menu == None:
+            # couldn't load menu, return nothing
+            return None
     
     try:
-        # get menu in default language
-        # menu = get_menu(slug)
-
         # if language code supplied, get translated menu if it exists
         if language_code:
             locale = Locale.objects.get(language_code=language_code)
-            locale_menu = menu.get_translation_or_none(locale=locale)
-            if locale_menu:
-                menu = locale_menu
         else:
-            language_code = translation.get_language()
+            try:
+                # takes the locale code from the LANGUAGE_CODE setting
+                locale = Locale.objects.get(language_code=translation.get_language())
+            except Locale.DoesNotExist:                     
+                try:
+                    # LANGUAGE_CODE locale is not one of the languages, try language component of locale (en-gb -> en) 
+                    locale = Locale.objects.get(language_code=translation.get_language()[:2])
+                except Locale.DoesNotExist:                     
+                    # still no match, use the default language code
+                    locale = Locale.objects.get(language_code=settings.LANGUAGES[0][0])
+
+        locale_menu = menu.get_translation_or_none(locale=locale)
+        if locale_menu:
+            menu = locale_menu
 
         # gather all menu item type, sort by menu_display_order at the end
         sub_menu_items = menu.sub_menu_items.all()
@@ -37,7 +53,7 @@ def get_menu_items(menu, logged_in, language_code=None):
             if item.show(logged_in):
                 menu_items.append({
                     'order': item.menu_display_order,
-                    'slug': item.title_of_submenu, 
+                    'submenu_id': item.submenu_id, 
                     'is_submenu': True,
                     'divider': item.show_divider_after_this_item,
                     'display_option': item.display_option,
@@ -58,10 +74,24 @@ def get_menu_items(menu, logged_in, language_code=None):
         for item in autofill_menu_items:
             trans_page = item.trans_page(language_code)
             if trans_page:
+                if item.include_linked_page:
+                    link_page_title = trans_page.title if trans_page else None
+                    if item.show(logged_in):
+                        menu_items.append({
+                            'order': item.menu_display_order,
+                            'title': trans_page.title, 
+                            'url': trans_page.url,
+                            'link_page_title': link_page_title,
+                            'is_submenu': False,
+                            'divider': True,
+                        })
                 if logged_in:
-                    list = trans_page.get_children().live().order_by(item.order_by)[:item.max_items]
+                    list = trans_page.get_children().live().order_by(item.order_by)
                 else:
-                    list = trans_page.get_children().live().public().order_by(item.order_by)[:item.max_items]
+                    list = trans_page.get_children().live().public().order_by(item.order_by)
+                if item.only_show_in_menus:
+                    list = list.filter(show_in_menus=True)
+                list = list[:item.max_items]
                 if list:
                     i = 0
                     for result in list:
@@ -79,9 +109,9 @@ def get_menu_items(menu, logged_in, language_code=None):
         return None
 
 @register.simple_tag()
-def get_menu(menu_slug):
+def get_menu(menu_id):
     try:
-        menu = Menu.objects.get(slug=menu_slug)
+        menu = Menu.objects.get(id=menu_id)
     except AttributeError:
         return None
     return menu

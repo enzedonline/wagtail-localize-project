@@ -123,13 +123,6 @@ WAGTAIL_CONTENT_LANGUAGES = LANGUAGES = [
 # used for language switcher to build url for flag icons - place this folder in the static dir
 LANGUAGE_FLAG_LOCATION = 'flags'
 
-LANGUAGE_HOMEPAGES = {
-    'en': '/home/',
-    'ca': '/home-1/',
-    'es': '/home-2/',
-    'fr': '/home-3/',
-}
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
@@ -140,6 +133,7 @@ STATICFILES_FINDERS = [
 
 STATICFILES_DIRS = [
     os.path.join(PROJECT_DIR, 'static'),
+    # os.path.join(PROJECT_DIR, 'menu', 'static'),
 ]
 
 # ManifestStaticFilesStorage is recommended in production, to prevent outdated
@@ -152,7 +146,6 @@ STATIC_URL = '/static/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
-
 
 # Wagtail settings
 
