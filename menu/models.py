@@ -14,7 +14,6 @@ from wagtail_localize.synctree import Locale
 from wagtail_localize.synctree import Page as LocalizePage
 
 from .edit_handlers import ReadOnlyPanel, RichHelpPanel, SubMenuFieldPanel
-from .fluid_iterator import FluidIterable
 
 class MenuListQuerySet(object):
     # Call as class()() to act as a function call, passes all menus to SubMenuPanel dropdown
@@ -78,16 +77,17 @@ class MenuForm(WagtailAdminPageForm):
 class MenuPanelsIterable(object):
     # Build the panels as an iterable. Probably not necessary here but it could be useful for a bit
     # of dynamic panel building later on
-    # The panels for the submenu form are built here and passed into the InlinePanel rather than declared in 
-    # the model itself
+    # The panels for the submenu form are built here and passed into the InlinePanel 
+    # rather than declared in the model itself
 
     def __iter__(self):
         # build submenu panels, including the FluidIterable for the widget
         submenu_selector=Select()
-        submenu_selector.choices = FluidIterable([])
+        # submenu_selector.choices = FluidIterable([])
         submenu_panels = [
             HelpPanel(_("Select the menu that this sub-menu will load")),
-            SubMenuFieldPanel("submenu_id", MenuListQuerySet()(), widget=submenu_selector),
+            # SubMenuFieldPanel("submenu_id", MenuListQuerySet()(), widget=submenu_selector),
+            SubMenuFieldPanel("submenu_id", MenuListQuerySet()()),
             FieldPanel("display_option"),
             FieldPanel("menu_display_order"),
             FieldPanel("show_divider_after_this_item"),
@@ -358,7 +358,7 @@ class AutofillMenuItem(MenuItem):
     # useful for routable pages
     # could also to POST arguments to a page (eg link_url = ?cat=news -> /blog/categories/?cat=news)
     link_page = models.ForeignKey(
-        LocalizePage,
+        LocalizePage, 
         blank=True,
         null=True,
         related_name="+",
@@ -430,7 +430,7 @@ class SubMenuItem(MenuItem):
         blank=False,
         null=True,
         help_text=_("Select the sub-menu to load"),
-        verbose_name=_("Submenu")
+        verbose_name=_("Submenu"),
     )
 
     # show if user logged in, logged out or always
@@ -449,6 +449,7 @@ class SubMenuItem(MenuItem):
 
     class Meta:
         unique_together = ('translation_key', 'locale')
+ 
 
 @register_snippet
 class CompanyLogo(models.Model):
