@@ -228,11 +228,6 @@ class SubMenuFieldPanel(FieldPanel):
             'field_name': self.field_name,
         }
 
-    # Override this function - if model field has no choices declared, it will render as a char field
-    # instead of a drop down. If choices are declared, widget.choices is ignored.
-    def field_type(self):
-        return 'typed_choice_field' 
-
     # Get parent id (if any) and locale id - logic based on uri of form
     # uri ends with parent id if it is in edit mode, ends in add/?locale=code if it is in add new mode
     # Fudge to get around lack of access to parent object
@@ -249,7 +244,7 @@ class SubMenuFieldPanel(FieldPanel):
             locale_id = getattr(parent_menu, 'locale_id')  
         return parent_menu_id, locale_id
 
-    # Create a list from the full queryset - filter by locale, exclude parent
+    # Create a list from the full queryset filtered by locale, exclude parent
     def _get_choice_list(self):
         parent_menu_id, locale_id = self._get_locale_and_parent()
         menu_list = self.list_queryset
@@ -260,6 +255,9 @@ class SubMenuFieldPanel(FieldPanel):
         return [('', '------')] + list(menu_list.values_list('id','title'))
 
     # declare widget with choices (this event seems to get called twice)
+    # change field type to typed_choice_field otherwise it'll appear as a text field with
+    # dropdown behaviour
     def on_form_bound(self):
         self.form.fields[self.field_name].widget = Select(choices=self._get_choice_list())
+        self.form.fields[self.field_name].__class__.__name__ = 'typed_choice_field'
         super().on_form_bound()
