@@ -1,5 +1,4 @@
 from django.db import models
-from django.forms.widgets import Select
 from django.utils.datastructures import MultiValueDictKeyError
 from django.utils.translation import gettext_lazy as _
 from modelcluster.fields import ParentalKey
@@ -10,8 +9,7 @@ from wagtail.admin.forms import WagtailAdminPageForm
 from wagtail.core.models import Orderable, TranslatableMixin
 from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.models import register_snippet
-from wagtail_localize.synctree import Locale
-from wagtail_localize.synctree import Page as LocalizePage
+from wagtail_localize.synctree import Locale, Page as LocalizePage
 
 from .edit_handlers import ReadOnlyPanel, RichHelpPanel, SubMenuFieldPanel
 
@@ -82,13 +80,11 @@ class MenuPanelsIterable(object):
 
     def __iter__(self):
         # build submenu panels, including the FluidIterable for the widget
-        submenu_selector=Select()
-        # submenu_selector.choices = FluidIterable([])
         submenu_panels = [
             HelpPanel(_("Select the menu that this sub-menu will load")),
-            # SubMenuFieldPanel("submenu_id", MenuListQuerySet()(), widget=submenu_selector),
             SubMenuFieldPanel("submenu_id", MenuListQuerySet()()),
             FieldPanel("display_option"),
+            FieldPanel("show_when"),
             FieldPanel("menu_display_order"),
             FieldPanel("show_divider_after_this_item"),
         ]
@@ -141,7 +137,6 @@ class MenuPanelsIterable(object):
                 classname="collapsible collapsed",
             ),
         ]
-        panels = [HelpPanel(str('ak'))] + panels
         return panels.__iter__()
 
 @register_snippet
@@ -210,39 +205,18 @@ class MenuItem(TranslatableMixin, Orderable):
     class Meta:
         abstract = True
 
-    def trans_page(self, language_code):
+    def trans_page(self, locale):
         """ returns the translated page for a given language if it exists """
         # if no link_page, return none
         if not self.link_page:
             return None
 
-        # default language, just return link_page
-        # if language_code == settings.LANGUAGES[0][0]:
-        #     return self.link_page
-
         # if language_code locale exists, retrun translated page
-        # if language_code locale doesn't exists, retrun default language page
-        # if language_code locale exists but no translated page, default language page
+        # if language_code locale doesn't exist, retrun original page
         try:
-            locale = Locale.objects.get(language_code=language_code)
-            trans_page = self.link_page.get_translation_or_none(locale=locale)
-            if trans_page != None:
-                return trans_page
-            return self.link_page 
+            return self.link_page.get_translation(locale=locale)
         except Locale.DoesNotExist:
             return self.link_page
-
-    def trans_url(self, language_code):
-        # if link_page and link_url set, assume url is suffix to link_page.url (anchor or parameter etc)
-        # else if link_url does not begin with '/' then assume external link, just return it
-        # if internal url (starts with '/') then insert requested code
-        if self.link_page:
-            return str(self.trans_page(language_code).url) + (str(self.link_url) if self.link_url != None else '')
-        elif self.link_url:
-            if self.link_url.startswith('/'):
-                return '/' + language_code + self.link_url
-            return self.link_url
-        return None
 
     def show(self, authenticated):
         return (

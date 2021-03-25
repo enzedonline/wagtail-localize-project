@@ -237,6 +237,7 @@ class SubMenuFieldPanel(FieldPanel):
         path = self.request.get_raw_uri()
         if path.split('/')[-2] == 'add':
             locale_id = Locale.objects.get(language_code=path.split('/')[-1].replace('?locale=','')).pk
+            parent_menu_id = None
         else:
             parent_menu = self.list_queryset.get(id=int(path.split('/')[-2]))
             # parent_menu = Menu.objects.get(id=int(path.split('/')[-2]))
