@@ -131,8 +131,6 @@ def get_menu_items(menu, request):
     
     # determine locale, get translated menu (if any)
     locale=get_locale(language_code, request)
-    if menu.has_translation(locale):
-        menu = menu.get_translation(locale=locale)
 
     # gather all menu item types, sort by menu_display_order at the end
     # create a list of all items that should be shown in the menu depending on logged_in
@@ -151,12 +149,22 @@ def get_menu_items(menu, request):
     return menu_items
 
 @register.simple_tag()
-def get_menu(menu_id):
+def get_menu(menu_id, language_code):
     # return the menu instance for a given id, or none if no match
     try:
         menu = Menu.objects.get(id=menu_id)
-    except AttributeError:
+    except (AttributeError, Menu.DoesNotExist):
         return None
+        # determine locale, get translated menu (if any)
+    
+    if language_code:
+        try:
+            locale=Locale.objects.get(language_code=language_code)
+            if menu.has_translation(locale):
+                menu = menu.get_translation(locale=locale)
+        except Locale.DoesNotExist:                     
+            pass
+
     return menu
 
 @register.simple_tag()

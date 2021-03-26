@@ -2,13 +2,9 @@
 {% load static i18n %}
 
 {% get_current_language as LANGUAGE_CODE %}
-{% get_menu 1 as main_menu %}
-{% if main_menu %}
-    {% get_menu_items main_menu request as navigation %}
-{% endif %}
 {% company_logo as logo %}
 
-<link rel="stylesheet" href="{% static '/css/wagtaillocalize.css'%}">
+<link rel="stylesheet" href="{% static '/css/menu.css'%}">
 
 <nav class="navbar navbar-expand-md navbar-dark bg-primary">
     <a class="navbar-brand" href="/">Wagtail Localize Test</a>
@@ -19,73 +15,77 @@
 
     <div class="collapse navbar-collapse w-100 order-1 order-md-0 dual-collapse2" id="navbarColor01">
         <ul class="navbar-nav mr-auto">
-            {% for item in navigation %}
-                {% if not item.is_submenu %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{item.url}}">                            
-                            {% if item.icon %}
-                                {% image item.icon fill-25x25 class="image-menu" %}
-                            {% endif %}
-                            {{ item.title }}
-                        </a>
-                    </li>
-                {% else %}
-                    {% get_menu item.submenu_id as sub_menu %}
-                    {% if sub_menu %}
-                        {% get_menu_items sub_menu request as sub_menu_items %}
-                        {% if sub_menu_items %}
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" id="navbardrop" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-                                    {% if item.display_option != 'text' and sub_menu.icon %}
-                                        {% image sub_menu.icon fill-25x25 class="image-menu" %}
-                                    {% endif %}
-                                    {% if item.display_option != 'icon'%}
-                                        {{ sub_menu.title }}
-                                    {% endif %}
-                                </a>
-                                <div class="dropdown-menu">
-                                    {% for subitem in sub_menu_items %}
-                                        {% if not subitem.is_submenu %}
-                                            <a class="dropdown-item" href="{{subitem.url}}">
-                                                {{ subitem.title }}
-                                            </a>
-                                        {% else %}
-                                            {% get_menu subitem.submenu_id as subsubmenu %}
-                                            {% if subsubmenu %}
-                                                {% get_menu_items subsubmenu request as sub_sub_menu_items %}
-                                                {% if sub_sub_menu_items %}
-                                                    <div class="dropright"> 
-                                                        <button class="btn btn-dark bg-transparent dropdown-toggle" data-toggle="dropdown">
-                                                            {% if subitem.display_option != 'text' and subsubmenu.icon %}
-                                                                {% image subsubmenu.icon fill-25x25 %}
-                                                            {% endif %}
-                                                            {% if subitem.display_option != 'icon'%}
-                                                                {{ subsubmenu.title }}
-                                                            {% endif %}
-                                                        </button>
-                                                        <div class="dropdown-menu dropdown-menu-left">
-                                                            {% for subitem in sub_sub_menu_items %}
-                                                                {% if not subitem.is_submenu %}
-                                                                    <a class="dropdown-item" href="{{subitem.url}}">
-                                                                        {{ subitem.title }}
-                                                                    </a>
+            {% get_menu 1 LANGUAGE_CODE as main_menu %}
+            {% if main_menu %}
+                {% get_menu_items main_menu request as navigation %}
+                {% for item in navigation %}
+                    {% if not item.is_submenu %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{item.url}}">                            
+                                {% if item.icon %}
+                                    {% image item.icon fill-25x25 class="image-menu" %}
+                                {% endif %}
+                                {{ item.title }}
+                            </a>
+                        </li>
+                    {% else %}
+                        {% get_menu item.submenu_id LANGUAGE_CODE as sub_menu %}
+                        {% if sub_menu %}
+                            {% get_menu_items sub_menu request as sub_menu_items %}
+                            {% if sub_menu_items %}
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" id="navbardrop" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                                        {% if item.display_option != 'text' and sub_menu.icon %}
+                                            {% image sub_menu.icon fill-25x25 class="image-menu" %}
+                                        {% endif %}
+                                        {% if item.display_option != 'icon'%}
+                                            {{ sub_menu.title }}
+                                        {% endif %}
+                                    </a>
+                                    <div class="dropdown-menu">
+                                        {% for subitem in sub_menu_items %}
+                                            {% if not subitem.is_submenu %}
+                                                <a class="dropdown-item" href="{{subitem.url}}">
+                                                    {{ subitem.title }}
+                                                </a>
+                                            {% else %}
+                                                {% get_menu subitem.submenu_id LANGUAGE_CODE as subsubmenu %}
+                                                {% if subsubmenu %}
+                                                    {% get_menu_items subsubmenu request as sub_sub_menu_items %}
+                                                    {% if sub_sub_menu_items %}
+                                                        <div class="dropright"> 
+                                                            <button class="btn btn-dark bg-transparent dropdown-toggle" data-toggle="dropdown">
+                                                                {% if subitem.display_option != 'text' and subsubmenu.icon %}
+                                                                    {% image subsubmenu.icon fill-25x25 %}
                                                                 {% endif %}
-                                                            {% endfor %}
+                                                                {% if subitem.display_option != 'icon'%}
+                                                                    {{ subsubmenu.title }}
+                                                                {% endif %}
+                                                            </button>
+                                                            <div class="dropdown-menu dropdown-menu-left">
+                                                                {% for subitem in sub_sub_menu_items %}
+                                                                    {% if not subitem.is_submenu %}
+                                                                        <a class="dropdown-item" href="{{subitem.url}}">
+                                                                            {{ subitem.title }}
+                                                                        </a>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endif %}
-                                        {% endif %}
-                                        {% if subitem.divider %}
-                                            <div class="dropdown-divider"></div>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                            </li>
+                                            {% if subitem.divider %}
+                                                <div class="dropdown-divider"></div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </li>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
-                {% endif %}
-            {% endfor %}
+                {% endfor %}
+            {% endif %}
         </ul>
     </div>
     {% comment %} 
