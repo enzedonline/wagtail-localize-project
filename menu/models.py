@@ -205,19 +205,6 @@ class MenuItem(TranslatableMixin, Orderable):
     class Meta:
         abstract = True
 
-    def trans_page(self, locale):
-        """ returns the translated page for a given language if it exists """
-        # if no link_page, return none
-        if not self.link_page:
-            return None
-
-        # if language_code locale exists, retrun translated page
-        # if language_code locale doesn't exist, retrun original page
-        try:
-            return self.link_page.get_translation(locale=locale)
-        except Locale.DoesNotExist:
-            return self.link_page
-
     def show(self, authenticated):
         return (
             (self.show_when == "always")
