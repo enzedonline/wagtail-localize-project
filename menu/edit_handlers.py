@@ -240,7 +240,6 @@ class SubMenuFieldPanel(FieldPanel):
             parent_menu_id = None
         else:
             parent_menu = self.list_queryset.get(id=int(path.split('/')[-2]))
-            # parent_menu = Menu.objects.get(id=int(path.split('/')[-2]))
             parent_menu_id = getattr(parent_menu, 'id')  
             locale_id = getattr(parent_menu, 'locale_id')  
         return parent_menu_id, locale_id
