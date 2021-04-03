@@ -19,7 +19,7 @@
                 {% get_menu_items main_menu request as navigation %}
                 {% for item in navigation %}
                     {% if not item.is_submenu %}
-                        <li class="nav-item">
+                        <li class="nav-item{% if request.path == item.url %} active{% endif %}">
                             <a class="nav-link" href="{{item.url}}">                            
                                 {% if item.icon %}
                                     {% image item.icon fill-25x25 class="image-menu" %}
@@ -44,7 +44,10 @@
                                     <div class="dropdown-menu">
                                         {% for subitem in sub_menu_items %}
                                             {% if not subitem.is_submenu %}
-                                                <a class="dropdown-item" href="{{subitem.url}}">
+                                                <a class="dropdown-item{% if request.path == subitem.url %} active{% endif %}" href="{{subitem.url}}">
+                                                    {% if subitem.icon %}
+                                                        {% image subitem.icon fill-25x25 class="image-menu" %}
+                                                    {% endif %}
                                                     {{ subitem.title }}
                                                 </a>
                                             {% else %}
@@ -53,7 +56,7 @@
                                                     {% get_menu_items subsubmenu request as sub_sub_menu_items %}
                                                     {% if sub_sub_menu_items %}
                                                         <div class="dropright"> 
-                                                            <button class="btn btn-dark bg-transparent dropdown-toggle" data-toggle="dropdown">
+                                                            <button class="btn btn-dark btn-block text-left bg-transparent dropdown-toggle" data-toggle="dropdown">
                                                                 {% if subitem.display_option != 'text' and subsubmenu.icon %}
                                                                     {% image subsubmenu.icon fill-25x25 %}
                                                                 {% endif %}
@@ -64,7 +67,10 @@
                                                             <div class="dropdown-menu dropdown-menu-left">
                                                                 {% for subitem in sub_sub_menu_items %}
                                                                     {% if not subitem.is_submenu %}
-                                                                        <a class="dropdown-item" href="{{subitem.url}}">
+                                                                        <a class="dropdown-item{% if request.path == subitem.url %} active{% endif %}" href="{{subitem.url}}">
+                                                                            {% if subitem.icon %}
+                                                                                {% image subitem.icon fill-25x25 class="image-menu" %}
+                                                                            {% endif %}
                                                                             {{ subitem.title }}
                                                                         </a>
                                                                     {% endif %}
