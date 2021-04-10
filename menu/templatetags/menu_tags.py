@@ -134,7 +134,7 @@ def language_switcher(page):
     for locale in Locale.objects.all():
         if not locale == current_lang: # add the link to switch language and also alternate link
             trans_page = page.get_translation(locale=locale)
-            alternate_link = f'<link rel="alternate" hreflang="{locale.language_code}" href="{trans_page.url}" />'
+            alternate_link = f'<link rel="alternate" hreflang="{locale.language_code}" href="{trans_page.get_full_url()}" />'
             switch_pages.append(
                 {
                     'language': locale, 
@@ -144,7 +144,7 @@ def language_switcher(page):
                 }
             )
         if locale == default_lang: # add the x-default link
-            default_link = f'<link rel="alternate" hreflang="x-default" href="{trans_page.url}" />'
+            default_link = f'<link rel="alternate" hreflang="x-default" href="{trans_page.get_full_url()}" />'
     return {'switch_pages':switch_pages, 'default_link': default_link}
 
 @register.simple_tag()
